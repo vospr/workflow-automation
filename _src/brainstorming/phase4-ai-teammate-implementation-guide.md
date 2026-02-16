@@ -58,47 +58,43 @@ jobs:
 
       - name: Install DMTOOLS
         run: |
-          # Adjust this to match DMTOOLS installation method
-          # Option A: npm install
-          npm install -g dmtools
-          # Option B: clone your fork and install
-          # git clone https://github.com/YOUR_USER/dmtools.git /tmp/dmtools
-          # cd /tmp/dmtools && npm install -g .
+          echo "Installing DMTools CLI from IstiN/dmtools repository..."
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+          echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
 
-      - name: Verify DMTOOLS
-        run: dmtools --version
+          # Verify installation
+          export PATH="$HOME/.dmtools/bin:$PATH"
+          if command -v dmtools >/dev/null 2>&1; then
+            echo "✅ dmtools installed"
+            dmtools --version || echo "Version check failed"
+          else
+            echo "❌ dmtools not found"
+            exit 1
+          fi
 
       - name: Test Jira connection
         env:
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_AUTH_TYPE: Basic
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
           dmtools jira_get_ticket ATL-2 summary,status
 ```
 
 **Before running:**
 1. Add GitHub Secrets to your repo:
-   - `JIRA_BASE_URL` = `https://your-site.atlassian.net`
+   - `JIRA_BASE_PATH` = `https://your-site.atlassian.net` (note: use BASE_PATH, not BASE_URL)
    - `JIRA_EMAIL` = your email
-   - `JIRA_API_TOKEN` = your Jira API token
+   - `JIRA_API_TOKEN` = your Jira API token (from id.atlassian.com/manage-profile/security/api-tokens)
 2. Push the workflow file
 3. Run manually: `gh workflow run test-dmtools.yml`
 4. Watch: `gh run watch`
 
-**PASS:** DMTOOLS installs, connects to Jira, returns ATL-2 data.
-**FAIL:** Check DMTOOLS install method for Linux. Try Docker fallback:
-```yaml
-      - name: Install DMTOOLS via Docker
-        run: |
-          docker pull dmtools/dmtools:latest
-          docker run --rm \
-            -e JIRA_BASE_URL=${{ secrets.JIRA_BASE_URL }} \
-            -e JIRA_EMAIL=${{ secrets.JIRA_EMAIL }} \
-            -e JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }} \
-            dmtools/dmtools:latest jira_get_ticket ATL-2 summary,status
-```
+**PASS:** DMTOOLS installs from IstiN/dmtools, connects to Jira, returns ATL-2 data.
+**FAIL:** Check the logs for installation errors. The install.sh script should work on Ubuntu runners.
 
 ### 0.3 Validate Claude Code CLI in GitHub Actions
 
@@ -162,17 +158,21 @@ jobs:
           node-version: '20'
 
       - name: Install DMTOOLS
-        run: npm install -g dmtools
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+          echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
 
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Fetch ticket context with DMTOOLS
         env:
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_AUTH_TYPE: Basic
         run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
           mkdir -p input/ATL-2
           dmtools jira_get_ticket ATL-2 summary,description,status > input/ATL-2/ticket.json
           echo "Ticket context fetched:"
@@ -189,10 +189,12 @@ jobs:
 
       - name: Post result as Jira comment
         env:
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_AUTH_TYPE: Basic
         run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
           RESPONSE=$(cat outputs/response.md)
           dmtools jira_post_comment ATL-2 "CI Smoke Test: ${RESPONSE}"
 ```
@@ -225,9 +227,10 @@ on:
         type: string
 
 env:
-  JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+  JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
   JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
   JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+  JIRA_AUTH_TYPE: Basic
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
 jobs:
@@ -247,7 +250,9 @@ jobs:
           node-version: '20'
 
       - name: Install DMTOOLS
-        run: npm install -g dmtools
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+          echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
 
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
@@ -255,6 +260,7 @@ jobs:
       - name: Select ticket
         id: select-ticket
         run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
           if [ -n "${{ inputs.ticket_key }}" ]; then
             echo "ticket_key=${{ inputs.ticket_key }}" >> $GITHUB_OUTPUT
             echo "Selected manually: ${{ inputs.ticket_key }}"
@@ -281,6 +287,7 @@ jobs:
       - name: Fetch ticket context
         if: steps.select-ticket.outputs.found != 'false'
         run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
           TICKET=${{ steps.select-ticket.outputs.ticket_key }}
           mkdir -p input/$TICKET
 
@@ -335,6 +342,7 @@ jobs:
       - name: Route output
         if: steps.select-ticket.outputs.found != 'false'
         run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
           TICKET=${{ steps.select-ticket.outputs.ticket_key }}
           TASK_TYPE=$(cat input/$TICKET/task_type.txt)
 
@@ -788,7 +796,7 @@ After the first successful end-to-end run, refine based on what you learn:
 | Secret | Value |
 |--------|-------|
 | `ANTHROPIC_API_KEY` | From console.anthropic.com |
-| `JIRA_BASE_URL` | `https://your-site.atlassian.net` |
+| `JIRA_BASE_PATH` | `https://your-site.atlassian.net` (note: use BASE_PATH, not BASE_URL) |
 | `JIRA_EMAIL` | Your Jira email |
 | `JIRA_API_TOKEN` | From id.atlassian.com/manage-profile/security/api-tokens |
 
