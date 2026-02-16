@@ -146,7 +146,7 @@ Step 4: run-claude-agent.sh
 
 Step 5: postJSActions
 ├─ developTicketAndCreatePR.js (reuse from DMTOOLS, adapt)
-├─ Label management (remove AI, add ai_processed)
+├─ Label management (remove AI, add AI_PROCESSED)
 └─ Jira comment posting
 
 Step 6: Test on ATL project

@@ -352,7 +352,7 @@ jobs:
               RESPONSE=$(cat outputs/response.md)
               dmtools jira_post_comment $TICKET "$RESPONSE"
               dmtools jira_remove_label $TICKET "AI"
-              dmtools jira_add_label $TICKET "ai_processed"
+              dmtools jira_add_label $TICKET "AI_PROCESSED"
               echo "Posted analysis comment to $TICKET"
               ;;
             code|review)
@@ -588,7 +588,7 @@ try {
     const response = fs.readFileSync('outputs/response.md', 'utf8');
     run(`dmtools jira_post_comment ${ticketKey} "${response.replace(/"/g, '\\"')}"`);
     run(`dmtools jira_remove_label ${ticketKey} "AI"`);
-    run(`dmtools jira_add_label ${ticketKey} "ai_processed"`);
+    run(`dmtools jira_add_label ${ticketKey} "AI_PROCESSED"`);
     process.exit(0);
   }
 
@@ -618,7 +618,7 @@ try {
 
   // Update labels
   run(`dmtools jira_remove_label ${ticketKey} "AI"`);
-  run(`dmtools jira_add_label ${ticketKey} "ai_processed"`);
+  run(`dmtools jira_add_label ${ticketKey} "AI_PROCESSED"`);
 
   console.log(`Done. PR: ${prUrl}`);
 
@@ -629,7 +629,7 @@ try {
   try {
     run(`dmtools jira_post_comment ${ticketKey} "AI Teammate failed: ${error.message.replace(/"/g, '\\"')}"`);
     run(`dmtools jira_remove_label ${ticketKey} "AI"`);
-    run(`dmtools jira_add_label ${ticketKey} "ai_failed"`);
+    run(`dmtools jira_add_label ${ticketKey} "AI_FAILED"`);
   } catch (e) {
     console.error('Failed to post error to Jira:', e.message);
   }
@@ -683,7 +683,7 @@ try {
 
   // Update labels
   run(`dmtools jira_remove_label ${ticketKey} "AI-Review"`);
-  run(`dmtools jira_add_label ${ticketKey} "ai_processed"`);
+  run(`dmtools jira_add_label ${ticketKey} "AI_PROCESSED"`);
 
   console.log('PR updated from review feedback.');
 
@@ -734,7 +734,7 @@ fi
    gh run watch
    ```
 5. **Verify:** ATL-5 has a new analysis comment from AI Teammate
-6. **Verify:** Label changed from `AI` to `ai_processed`
+6. **Verify:** Label changed from `AI` to `AI_PROCESSED`
 
 ### 6.2 Test Code Flow
 
@@ -746,7 +746,7 @@ fi
    ```
 4. **Verify:** PR created against main with code changes
 5. **Verify:** Jira comment with PR link posted
-6. **Verify:** Label changed to `ai_processed`
+6. **Verify:** Label changed to `AI_PROCESSED`
 
 ### 6.3 Test AI-Review Flow
 
@@ -758,7 +758,7 @@ fi
    ```
 4. **Verify:** PR updated with new commit addressing feedback
 5. **Verify:** Jira comment confirms review addressed
-6. **Verify:** Label changed to `ai_processed`
+6. **Verify:** Label changed to `AI_PROCESSED`
 
 ### 6.4 Test Cron Polling
 
@@ -772,7 +772,7 @@ fi
 1. Add label `AI` to a ticket with minimal/empty description
 2. Trigger and watch
 3. **Verify:** Jira comment reports failure reason
-4. **Verify:** Label changed to `ai_failed` (not stuck as `AI`)
+4. **Verify:** Label changed to `AI_FAILED` (not stuck as `AI`)
 
 ---
 
@@ -806,8 +806,8 @@ After the first successful end-to-end run, refine based on what you learn:
 |-------|--------|--------|
 | `AI` | Full processing (analysis or code based on ticket type) | Jira comment or PR |
 | `AI-Review` | Fix code from PR review feedback | Updated PR |
-| `ai_processed` | (System) Ticket was successfully processed | — |
-| `ai_failed` | (System) Processing failed | Error comment on ticket |
+| `AI_PROCESSED` | (System) Ticket was successfully processed | — |
+| `AI_FAILED` | (System) Processing failed | Error comment on ticket |
 
 ### Manual Trigger Commands
 

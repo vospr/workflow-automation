@@ -138,7 +138,7 @@ jobs:
               RESPONSE=$(cat outputs/response.md)
               dmtools jira_post_comment $TICKET "$RESPONSE"
               dmtools jira_remove_label $TICKET "AI"
-              dmtools jira_add_label $TICKET "ai_processed"
+              dmtools jira_add_label $TICKET "AI_PROCESSED"
               echo "Posted analysis comment to $TICKET"
               ;;
             code|review)
