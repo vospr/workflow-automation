@@ -17,15 +17,19 @@ jobs:
 
       - name: Install DMTOOLS
         run: |
-          # Adjust this to match DMTOOLS installation method
-          # Option A: npm install
-          npm install -g dmtools
-          # Option B: clone your fork and install
-          # git clone https://github.com/YOUR_USER/dmtools.git /tmp/dmtools
-          # cd /tmp/dmtools && npm install -g .
+          echo "Installing DMTools CLI from original repository..."
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+          echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
 
-      - name: Verify DMTOOLS
-        run: dmtools --version
+          # Verify installation
+          export PATH="$HOME/.dmtools/bin:$PATH"
+          if command -v dmtools >/dev/null 2>&1; then
+            echo "✅ dmtools installed"
+            dmtools --version || echo "Version check failed"
+          else
+            echo "❌ dmtools not found"
+            exit 1
+          fi
 
       - name: Test Jira connection
         env:
@@ -34,4 +38,5 @@ jobs:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
           dmtools jira_get_ticket ATL-2 summary,status
