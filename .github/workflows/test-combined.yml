@@ -1,0 +1,57 @@
+name: Test Combined Stack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install DMTOOLS
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+          echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Fetch ticket context with DMTOOLS
+        env:
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_AUTH_TYPE: Basic
+        run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
+          mkdir -p input/ATL-2
+          dmtools jira_get_ticket ATL-2 summary,description,status > input/ATL-2/ticket.json
+          echo "Ticket context fetched:"
+          cat input/ATL-2/ticket.json
+
+      - name: Run Claude on ticket context
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mkdir -p outputs
+          claude -p "Read input/ATL-2/ticket.json and write a one-paragraph summary to outputs/response.md. Only write the file, nothing else." --dangerously-skip-permissions
+          echo "Claude output:"
+          cat outputs/response.md
+
+      - name: Post result as Jira comment
+        env:
+          JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_AUTH_TYPE: Basic
+        run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
+          RESPONSE=$(cat outputs/response.md)
+          dmtools jira_post_comment ATL-2 "CI Smoke Test: ${RESPONSE}"
