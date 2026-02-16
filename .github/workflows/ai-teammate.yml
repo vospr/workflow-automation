@@ -1,9 +1,9 @@
 name: AI Teammate v2
 
 on:
-  schedule:
-    # Every 15 min, 8am-6pm UTC, Mon-Fri
-    - cron: '*/15 8-18 * * 1-5'
+  # schedule:
+  #   # Every 15 min, 8am-6pm UTC, Mon-Fri
+  #   - cron: '*/15 8-18 * * 1-5'
   workflow_dispatch:
     inputs:
       ticket_key:
