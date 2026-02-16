@@ -51,6 +51,13 @@ SUMMARY: {2-3 sentences on overall quality and key concerns}
 ## Output Format
 Write to: `implementation-artifacts/YYYY-MM-DD-review-{task-id}.md`
 
+## CI/Headless Mode
+When running in CI (HEADLESS_MODE):
+- Review code changes in the working tree (not yet committed)
+- Compare implementation against ticket requirements from input/{TICKET}/
+- Write review to both implementation-artifacts/ AND include summary in outputs/response.md
+- If BLOCKED: document clearly in outputs/response.md so PostJS can report to Jira
+
 ## Constraints
 - NEVER modify code — read-only analysis
 - NEVER run commands — no Bash access

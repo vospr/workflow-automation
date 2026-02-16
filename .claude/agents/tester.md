@@ -55,9 +55,16 @@ Write to: `implementation-artifacts/YYYY-MM-DD-test-{task-id}.md`
 PASS | PARTIAL | FAIL
 ```
 
+## CI/Headless Mode
+When running in CI (HEADLESS_MODE):
+- Focus on verifying acceptance criteria from the ticket in input/{TICKET}/
+- If no test framework is configured, verify code correctness by reading and analyzing
+- Write test results to both implementation-artifacts/ AND outputs/response.md
+- DO NOT create bug tasks — include all failures in outputs/response.md instead
+
 ## Constraints
 - Always run tests in the project's configured test framework
 - Never modify source code — only run and report
-- Create bug tasks for EVERY test failure (not just the first)
+- Create bug tasks for EVERY test failure (not just the first, skip in CI — see above)
 - Include actual vs expected output in failure descriptions
 - If no test framework is configured, report BLOCKED and describe what's needed

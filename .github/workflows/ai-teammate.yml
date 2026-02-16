@@ -1,9 +1,8 @@
-name: AI Teammate
+name: AI Teammate v2
 
 on:
   schedule:
     # Every 15 min, 8am-6pm UTC, Mon-Fri
-    # Adjust timezone offset as needed
     - cron: '*/15 8-18 * * 1-5'
   workflow_dispatch:
     inputs:
@@ -22,7 +21,7 @@ env:
 jobs:
   process-ticket:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repo
@@ -49,11 +48,11 @@ jobs:
           export PATH="$HOME/.dmtools/bin:$PATH"
           if [ -n "${{ inputs.ticket_key }}" ]; then
             echo "ticket_key=${{ inputs.ticket_key }}" >> $GITHUB_OUTPUT
+            echo "found=true" >> $GITHUB_OUTPUT
             echo "Selected manually: ${{ inputs.ticket_key }}"
           else
-            # Poll JQL for AI-labeled tickets, priority ordered
             RESULT=$(dmtools jira_search_by_jql \
-              "assignee = currentUser() AND labels in ('AI', 'AI-Review') ORDER BY priority DESC, created ASC" \
+              "assignee = currentUser() AND labels in ('AI', 'AI-REVIEW') ORDER BY priority DESC, created ASC" \
               "key,summary,labels,issuetype" \
               --limit 1)
 
@@ -75,9 +74,9 @@ jobs:
         run: |
           export PATH="$HOME/.dmtools/bin:$PATH"
           TICKET=${{ steps.select-ticket.outputs.ticket_key }}
-          mkdir -p input/$TICKET
+          mkdir -p input/$TICKET outputs planning-artifacts implementation-artifacts
 
-          # Fetch ticket with context depth 1 (ticket + children)
+          # Fetch ticket data
           dmtools jira_get_ticket $TICKET \
             summary,description,status,labels,issuetype,priority,acceptance_criteria \
             > input/$TICKET/ticket.json
@@ -93,8 +92,15 @@ jobs:
 
           # Determine task type from labels
           LABELS=$(cat input/$TICKET/ticket.json | jq -r '.fields.labels | join(",")')
-          if echo "$LABELS" | grep -q "AI-Review"; then
+          if echo "$LABELS" | grep -qi "AI-REVIEW"; then
             echo "review" > input/$TICKET/task_type.txt
+
+            # For review tasks, fetch PR review comments
+            PR_URL=$(gh pr list --head "feature/$TICKET" --json url --jq '.[0].url' || echo "")
+            if [ -n "$PR_URL" ]; then
+              gh pr view "$PR_URL" --json reviews,comments \
+                > input/$TICKET/pr_review.json || echo "{}" > input/$TICKET/pr_review.json
+            fi
           else
             ISSUE_TYPE=$(cat input/$TICKET/ticket.json | jq -r '.fields.issuetype.name')
             case "$ISSUE_TYPE" in
@@ -106,23 +112,17 @@ jobs:
 
           echo "Task type: $(cat input/$TICKET/task_type.txt)"
 
-      - name: Run Claude Code
+      - name: Run Claude Code (Orchestrated)
         if: steps.select-ticket.outputs.found != 'false'
         run: |
           TICKET=${{ steps.select-ticket.outputs.ticket_key }}
           TASK_TYPE=$(cat input/$TICKET/task_type.txt)
-          mkdir -p outputs
 
-          # Load the appropriate agent config
-          CONFIG_FILE="agents/${TASK_TYPE}.json"
-          if [ ! -f "$CONFIG_FILE" ]; then
-            CONFIG_FILE="agents/default.json"
-          fi
+          # Build orchestration prompt
+          chmod +x scripts/build-orchestration-prompt.sh
+          PROMPT=$(bash scripts/build-orchestration-prompt.sh "$TICKET" "$TASK_TYPE")
 
-          # Build prompt from agent config
-          PROMPT=$(node scripts/build-claude-prompt.js "$CONFIG_FILE" "$TICKET")
-
-          # Run Claude Code headless
+          # Run Claude Code as Main Agent — CLAUDE.md auto-loads
           claude -p "$PROMPT" --dangerously-skip-permissions
 
       - name: Route output
@@ -132,9 +132,17 @@ jobs:
           TICKET=${{ steps.select-ticket.outputs.ticket_key }}
           TASK_TYPE=$(cat input/$TICKET/task_type.txt)
 
+          # Verify outputs/response.md exists
+          if [ ! -f "outputs/response.md" ]; then
+            echo "ERROR: outputs/response.md not found. Claude may have failed."
+            dmtools jira_post_comment $TICKET "AI Teammate v2: No output produced. Check GitHub Actions logs."
+            dmtools jira_remove_label $TICKET "AI"
+            dmtools jira_add_label $TICKET "AI_FAILED"
+            exit 1
+          fi
+
           case "$TASK_TYPE" in
             analysis)
-              # Post analysis as Jira comment
               RESPONSE=$(cat outputs/response.md)
               dmtools jira_post_comment $TICKET "$RESPONSE"
               dmtools jira_remove_label $TICKET "AI"
@@ -142,7 +150,17 @@ jobs:
               echo "Posted analysis comment to $TICKET"
               ;;
             code|review)
-              # Run postJSAction to handle git + PR
               node agents/postActions/developTicketAndCreatePR.js $TICKET
               ;;
           esac
+
+      - name: Upload artifacts
+        if: always() && steps.select-ticket.outputs.found != 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-teammate-artifacts-${{ steps.select-ticket.outputs.ticket_key }}
+          path: |
+            planning-artifacts/
+            implementation-artifacts/
+            outputs/
+          retention-days: 30

@@ -133,6 +133,36 @@ SEVERITY per issue: CRITICAL | MAJOR | MINOR
 3. If no tasks: greet user, ask for project goal
 4. If resuming: report current progress, identify next unblocked task
 
+## Headless CI Mode
+
+When running in GitHub Actions (no interactive user):
+
+### Detection
+- Environment variable `CI=true` is set by GitHub Actions
+- Or prompt contains `HEADLESS_MODE: true`
+
+### Rules
+1. NEVER use AskUserQuestion — make best-effort decisions, document assumptions
+2. NEVER use EnterPlanMode — plan internally via planner agent dispatch
+3. Time budget: complete all work within 45 minutes total
+4. If blocked on ambiguity: document in outputs/response.md, proceed with safest option
+5. Git operations: DO NOT create branches, commit, or push — PostJS handles delivery
+6. Write final summary to outputs/response.md ALWAYS — this is the handoff to PostJS
+
+### Ticket Processing Flow
+When given a Jira ticket context in input/:
+1. Read input/{TICKET}/ticket.json — primary requirements
+2. Read input/{TICKET}/children.json — subtask context
+3. Read input/{TICKET}/comments.json — conversation history
+4. Read input/{TICKET}/task_type.txt — determines processing pipeline
+5. Dispatch agents per task type (see below)
+6. Write summary to outputs/response.md
+
+### Pipeline by Task Type
+- **analysis**: planner → researcher (if needed) → write analysis to outputs/response.md
+- **code**: planner → implementer → reviewer → [fix cycle max 3] → tester → outputs/response.md
+- **review**: read input/{TICKET}/pr_review.json → implementer → reviewer → outputs/response.md
+
 ## CLAUDE.md Size Constraint
 This file MUST NOT exceed 200 lines.
 If new orchestration logic is needed:
