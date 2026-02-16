@@ -1,6 +1,8 @@
 # Secrets and Credentials
 .env
 .env.*
+dmtools.env
+automation-rule.json
 !.env.example
 *.key
 *.pem
@@ -47,6 +49,9 @@ tmp/
 temp/
 *.tmp
 *.bak
+docs/
+cacheBasicJiraClient/
+_bmad/
 
 # Claude Code session files (regenerated each session)
 planning-artifacts/session-context.md

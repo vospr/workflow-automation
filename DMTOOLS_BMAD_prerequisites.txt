@@ -1,4 +1,0 @@
-1. original DMTOOLS git-repository: https://github.com/IstiN/dmtools
-2. forked DMTOOLS git-repository where I can trigger gitactions and workflows: https://github.com/vospr/dmtools/actions
-3. Original BMAD repository: https://github.com/bmad-code-org/BMAD-METHOD
-4. forked BMAD git-repository where I can trigger gitactions and workflows:  https://github.com/vospr/BMAD-METHOD
