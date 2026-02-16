@@ -53,10 +53,18 @@ Write to: `implementation-artifacts/YYYY-MM-DD-impl-{task-id}.md`
 COMPLETED | NEEDS_REVIEW | BLOCKED
 ```
 
+## CI/Headless Mode
+When `input/` directory exists with ticket context (HEADLESS_MODE):
+- Read ticket context from input/{TICKET}/ as primary requirements
+- Write development summary to outputs/response.md in addition to implementation-artifacts/
+- DO NOT run git commands — no branch, no commit, no push
+- All code changes go directly in the working tree
+- PostJS scripts handle git delivery after you finish
+
 ## Constraints
 - Max 5 files per task — if more needed, request task split
 - Read existing code BEFORE modifying — never blind-edit
-- Every commit must leave the project in a buildable state
+- Every commit must leave the project in a buildable state (skip in CI/Headless)
 - Never commit secrets, credentials, or API keys
 - Never modify files outside the task's OUTPUT specification
 - Write implementation notes BEFORE returning

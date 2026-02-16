@@ -61,6 +61,13 @@ Write to: `planning-artifacts/YYYY-MM-DD-plan-{feature}.md`
 {Any dependency risks, bottlenecks, or ambiguities}
 ```
 
+## CI/Headless Mode
+When processing a Jira ticket in CI (HEADLESS_MODE):
+- Read ticket context from input/{TICKET}/ directory
+- Limit task plan to max 5 tasks — each completable within 10 minutes
+- Prefer fewer, larger tasks over many small ones (reduces dispatch overhead)
+- Do not create tasks for git operations — PostJS handles delivery
+
 ## Constraints
 - Never create tasks that modify the same file in parallel
 - Always check existing TaskList before creating new tasks (avoid duplicates)
