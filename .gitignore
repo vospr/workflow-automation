@@ -52,7 +52,7 @@ temp/
 docs/
 cacheBasicJiraClient/
 _bmad/
-_src
+_src/
 
 # AI Teammate workflow temporary folders (all runtime, regenerated per run)
 input/
