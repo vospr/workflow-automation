@@ -1,0 +1,148 @@
+name: AI Teammate
+
+on:
+  schedule:
+    # Every 15 min, 8am-6pm UTC, Mon-Fri
+    # Adjust timezone offset as needed
+    - cron: '*/15 8-18 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      ticket_key:
+        description: 'Specific ticket key (leave empty to poll JQL)'
+        required: false
+        type: string
+
+env:
+  JIRA_BASE_PATH: ${{ secrets.JIRA_BASE_PATH }}
+  JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+  JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+  JIRA_AUTH_TYPE: Basic
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+jobs:
+  process-ticket:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install DMTOOLS
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/IstiN/dmtools/main/install.sh | bash
+          echo "$HOME/.dmtools/bin" >> $GITHUB_PATH
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Select ticket
+        id: select-ticket
+        run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
+          if [ -n "${{ inputs.ticket_key }}" ]; then
+            echo "ticket_key=${{ inputs.ticket_key }}" >> $GITHUB_OUTPUT
+            echo "Selected manually: ${{ inputs.ticket_key }}"
+          else
+            # Poll JQL for AI-labeled tickets, priority ordered
+            RESULT=$(dmtools jira_search_by_jql \
+              "assignee = currentUser() AND labels in ('AI', 'AI-Review') ORDER BY priority DESC, created ASC" \
+              "key,summary,labels,issuetype" \
+              --limit 1)
+
+            TICKET_KEY=$(echo "$RESULT" | jq -r '.[0].key // empty')
+
+            if [ -z "$TICKET_KEY" ]; then
+              echo "No tickets found with AI label. Exiting."
+              echo "found=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            echo "ticket_key=$TICKET_KEY" >> $GITHUB_OUTPUT
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "Selected from JQL: $TICKET_KEY"
+          fi
+
+      - name: Fetch ticket context
+        if: steps.select-ticket.outputs.found != 'false'
+        run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
+          TICKET=${{ steps.select-ticket.outputs.ticket_key }}
+          mkdir -p input/$TICKET
+
+          # Fetch ticket with context depth 1 (ticket + children)
+          dmtools jira_get_ticket $TICKET \
+            summary,description,status,labels,issuetype,priority,acceptance_criteria \
+            > input/$TICKET/ticket.json
+
+          # Fetch child tickets
+          dmtools jira_search_by_jql "parent = $TICKET" \
+            "key,summary,status,description" \
+            > input/$TICKET/children.json || echo "[]" > input/$TICKET/children.json
+
+          # Fetch comments
+          dmtools jira_get_comments $TICKET \
+            > input/$TICKET/comments.json || echo "[]" > input/$TICKET/comments.json
+
+          # Determine task type from labels
+          LABELS=$(cat input/$TICKET/ticket.json | jq -r '.fields.labels | join(",")')
+          if echo "$LABELS" | grep -q "AI-Review"; then
+            echo "review" > input/$TICKET/task_type.txt
+          else
+            ISSUE_TYPE=$(cat input/$TICKET/ticket.json | jq -r '.fields.issuetype.name')
+            case "$ISSUE_TYPE" in
+              Bug|Story) echo "code" > input/$TICKET/task_type.txt ;;
+              Task|Analysis) echo "analysis" > input/$TICKET/task_type.txt ;;
+              *) echo "analysis" > input/$TICKET/task_type.txt ;;
+            esac
+          fi
+
+          echo "Task type: $(cat input/$TICKET/task_type.txt)"
+
+      - name: Run Claude Code
+        if: steps.select-ticket.outputs.found != 'false'
+        run: |
+          TICKET=${{ steps.select-ticket.outputs.ticket_key }}
+          TASK_TYPE=$(cat input/$TICKET/task_type.txt)
+          mkdir -p outputs
+
+          # Load the appropriate agent config
+          CONFIG_FILE="agents/${TASK_TYPE}.json"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            CONFIG_FILE="agents/default.json"
+          fi
+
+          # Build prompt from agent config
+          PROMPT=$(node scripts/build-claude-prompt.js "$CONFIG_FILE" "$TICKET")
+
+          # Run Claude Code headless
+          claude -p "$PROMPT" --dangerously-skip-permissions
+
+      - name: Route output
+        if: steps.select-ticket.outputs.found != 'false'
+        run: |
+          export PATH="$HOME/.dmtools/bin:$PATH"
+          TICKET=${{ steps.select-ticket.outputs.ticket_key }}
+          TASK_TYPE=$(cat input/$TICKET/task_type.txt)
+
+          case "$TASK_TYPE" in
+            analysis)
+              # Post analysis as Jira comment
+              RESPONSE=$(cat outputs/response.md)
+              dmtools jira_post_comment $TICKET "$RESPONSE"
+              dmtools jira_remove_label $TICKET "AI"
+              dmtools jira_add_label $TICKET "ai_processed"
+              echo "Posted analysis comment to $TICKET"
+              ;;
+            code|review)
+              # Run postJSAction to handle git + PR
+              node agents/postActions/developTicketAndCreatePR.js $TICKET
+              ;;
+          esac

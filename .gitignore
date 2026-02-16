@@ -53,6 +53,10 @@ docs/
 cacheBasicJiraClient/
 _bmad/
 
+# AI Teammate workflow temporary folders
+input/
+outputs/
+
 # Claude Code session files (regenerated each session)
 planning-artifacts/session-context.md
 planning-artifacts/mcp-health.md
