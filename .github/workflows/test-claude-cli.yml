@@ -1,0 +1,22 @@
+name: Test Claude Code CLI in CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-claude:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Claude Code CLI
+        run: |
+          # Install via npm (check latest install method)
+          npm install -g @anthropic-ai/claude-code
+
+      - name: Test Claude headless
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude -p "Respond with exactly: CLAUDE_CLI_WORKS" --dangerously-skip-permissions
